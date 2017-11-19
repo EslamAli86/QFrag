@@ -88,18 +88,19 @@ public class Runner implements Tool {
         // create the computation that will be executed by each partition
         ComputationFunction computeFunction = new ComputationFunction(inputFilePath, numPartitions);
 
+        // pass the computation function to each partition to be executed
         JavaRDD<Tuple2<Integer, String>> step1 = globalRDD.mapPartitionsWithIndex(computeFunction,false);
 
         // store the results of the map function in memory
         step1.persist(StorageLevel.MEMORY_ONLY());
-        // materialize the map function (i.e. execute the first step)
+        // materialize the map function (i.e. execute the computation function)
         step1.foreachPartition(x -> {});
 
         // Now flatten the results
         JavaPairRDD<Integer,String> step1Flattened = step1.flatMapToPair(tuple -> {
-                ArrayList list = new ArrayList();
-                list.add(new Tuple2(tuple._1(), tuple._2()));
-                return list.iterator();
+            ArrayList list = new ArrayList();
+            list.add(new Tuple2(tuple._1(), tuple._2()));
+            return list.iterator();
         });
 
         // Now group the messages by the Id of the destination partition
@@ -107,7 +108,7 @@ public class Runner implements Tool {
         // received from other partitions
         step1Flattened.groupByKey().foreach( group -> {
             // print the Id of the destination partition
-            System.out.println("I am partition " + group._1() + " and I got the following messages:");
+            System.out.println("I am partition " + group._1() + ", and I received the following messages:");
             Iterator<String> iter = group._2().iterator();
             while(iter.hasNext()) {
                 System.out.println(iter.next());
