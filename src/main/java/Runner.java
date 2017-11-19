@@ -76,73 +76,53 @@ public class Runner implements Tool {
 
         init();
 
-        this.process2();
-//        JavaRDD step2 = step1.groupBy(t -> t._1());
+        process();
 
         return 0;
     }
 
-    public void process1() {
+    public void process() {
+        // create the partitions RDD
         globalRDD = sc.parallelize(new ArrayList<Tuple2<Integer, String>>(), numPartitions).cache();
 
-        JavaRDD<Tuple2<Integer, String>> step1 = globalRDD.mapPartitionsWithIndex((pId, y) -> {
-            System.out.println("I am partition " + pId + "and the input files are ");//) + configBC.value());
-
-            ArrayList<Tuple2<Integer, String>> list = new ArrayList();
-
-            for(int i = 0 ; i < numPartitions ; ++i) {
-                String msg = "This is from partition " + pId + "to partition " + i;
-                list.add(new Tuple2<>(i,msg));
-            }
-
-            return list.iterator();
-        },false);
-
-        step1.persist(StorageLevel.MEMORY_ONLY());
-        step1.foreachPartition(x -> {});
-    }
-
-    public void process2() {
-        globalRDD = sc.parallelize(new ArrayList<Tuple2<Integer, String>>(), numPartitions).cache();
-
-        ComputationFunction computeFunction = new ComputationFunction();
+        // create the computation that will be executed by each partition
+        ComputationFunction computeFunction = new ComputationFunction(inputFilePath, numPartitions);
 
         JavaRDD<Tuple2<Integer, String>> step1 = globalRDD.mapPartitionsWithIndex(computeFunction,false);
 
+        // store the results of the map function in memory
         step1.persist(StorageLevel.MEMORY_ONLY());
+        // materialize the map function (i.e. execute the first step)
         step1.foreachPartition(x -> {});
 
-        System.out.println("Results count = " + step1.count());
-
-        step1.foreach(x -> {
-            System.out.println(x._1() + " $$$ " + x._2());
-        });
-
-/*        JavaPairRDD flatStep1 = step1.flatMapToPair(new PairFlatMapFunction<Tuple2<Integer,String>, Object, Object>() {
-
-            @Override
-            public Iterator<Tuple2<Object, Object>> call(Tuple2<Integer, String> integerStringTuple2) throws Exception {
+        // Now flatten the results
+        JavaPairRDD<Integer,String> step1Flattened = step1.flatMapToPair(tuple -> {
                 ArrayList list = new ArrayList();
-                list.add(new Tuple2<Object,Object>(integerStringTuple2._1(),integerStringTuple2._2()));
-                return list.iterator();
-            }
-        });*/
-
-        JavaPairRDD<Integer,String> flatStep1 = step1.flatMapToPair(tuple -> {
-                ArrayList list = new ArrayList();
-                list.add(new Tuple2<Integer,String>(tuple._1(), tuple._2()));
+                list.add(new Tuple2(tuple._1(), tuple._2()));
                 return list.iterator();
         });
 
-        List<Tuple2<Integer, Iterable<String>>> msgList = flatStep1.groupByKey().collect();
-
-        for(int i = 0 ; i < msgList.size() ; ++i) {
-            Iterator<String> iter = msgList.get(i)._2().iterator();
-            System.out.println("I am partition " + msgList.get(i)._1() + " and I got msgs:");
+        // Now group the messages by the Id of the destination partition
+        // and print the messages that the destination partition
+        // received from other partitions
+        step1Flattened.groupByKey().foreach( group -> {
+            // print the Id of the destination partition
+            System.out.println("I am partition " + group._1() + " and I got the following messages:");
+            Iterator<String> iter = group._2().iterator();
             while(iter.hasNext()) {
                 System.out.println(iter.next());
             }
-        }
+        });
+
+        /*List<Tuple2<Integer, Iterable<String>>> msgList = flatStep1.groupByKey().collect();
+
+        for(int i = 0 ; i < msgList.size() ; ++i) {
+            Iterator<String> iter = msgList.get(i)._2().iterator();
+            System.out.println("I am partition " + msgList.get(i)._1() + " and I got the following messages:");
+            while(iter.hasNext()) {
+                System.out.println(iter.next());
+            }
+        }*/
     }
 
     public static void main(String[] args) throws Exception {
@@ -150,44 +130,26 @@ public class Runner implements Tool {
     }
 }
 
+class ComputationFunction implements Function2<Integer, Iterator<Tuple2<Integer, String>>, Iterator<Tuple2<Integer, String>>>, Serializable {
 
+    String inputPath = "Path";
+    int numPartitions = 0;
 
-class ComputationFunction implements Function2<Integer, Iterator<Step1Engine>, Iterator<Step1Engine>>, Serializable {
-
-    public ComputationFunction() {
-
+    public ComputationFunction(String _inputPath, int _numPartitions) {
+        this.inputPath = _inputPath;
+        this.numPartitions = _numPartitions;
     }
 
     @Override
-    public Iterator<Step1Engine> call(Integer partitionId, Iterator<Step1Engine> v2) throws Exception {
-
-        Step1Engine engine = new Step1Engine(partitionId,8, "File");//, this.superstep, inBC);
-
-        Iterator<Step1Engine> iter = engine.compute();
-
-        return iter;
-    }
-}
-
-class Step1Engine implements Serializable {
-
-    int pId = 0;
-    int numPartitions = 0;
-    String inputFile;
-
-    public Step1Engine(int _pId, int _numPartitions, String _inputFile) {
-        pId = _pId;
-        numPartitions = _numPartitions;
-        inputFile = _inputFile;
-    }
-
-    public Iterator compute() {
-        System.out.println("I am partition " + pId + " and the input files are " + inputFile);//) + configBC.value());
+    public Iterator<Tuple2<Integer, String>> call(Integer partitionId, Iterator<Tuple2<Integer, String>> v2) throws Exception {
+        // Who am I?
+        System.out.println("I am partition " + partitionId + " and the input files are " + inputPath);
 
         ArrayList<Tuple2<Integer, String>> list = new ArrayList();
 
+        // Send my message to the other partitions
         for(int i = 0 ; i < numPartitions ; ++i) {
-            String msg = "This is from partition " + pId + " to partition " + i;
+            String msg = "This is from partition " + partitionId + " to partition " + i;
             list.add(new Tuple2<>(i,msg));
         }
 
