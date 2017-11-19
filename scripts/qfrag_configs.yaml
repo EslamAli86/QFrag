@@ -1,0 +1,4 @@
+input_graph_path: hdfs:///input/citeseer.graph
+
+output_path: hdfs:///output/qfrag
+
