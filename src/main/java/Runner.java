@@ -7,7 +7,6 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
-import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.storage.StorageLevel;
 import scala.collection.JavaConversions;
@@ -15,7 +14,6 @@ import conf.*;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Iterator;
 
 import scala.Tuple2;
@@ -34,14 +32,11 @@ public class Runner implements Tool {
     private Configuration conf;
 
     private String inputFilePath = null;
-    private Broadcast<String> inputBC = null;
-    private Broadcast<SparkConfiguration> configBC;
     private int numPartitions = 0;
-    JavaRDD globalRDD = null;
-    SparkConfiguration config = null;
-    JavaSparkContext sc = null;
+    private SparkConfiguration config = null;
+    private JavaSparkContext sc = null;
 
-    public void init() {
+    private void init() {
         String log_level = config.getLogLevel();
         LOG.info("Setting log level to " + log_level);
         LOG.setLevel(Level.toLevel(log_level));
@@ -50,8 +45,8 @@ public class Runner implements Tool {
         config.setHadoopConfig (sc.hadoopConfiguration());
         numPartitions = config.numPartitions();
 
-        inputBC = sc.broadcast(inputFilePath);
-        configBC = sc.broadcast(config);
+        sc.broadcast(inputFilePath);
+        Broadcast<SparkConfiguration> configBC = sc.broadcast(config);
 
         configBC.value().initialize();
     }
@@ -81,9 +76,9 @@ public class Runner implements Tool {
         return 0;
     }
 
-    public void process() {
+    private void process() {
         // create the partitions RDD
-        globalRDD = sc.parallelize(new ArrayList<Tuple2<Integer, String>>(), numPartitions).cache();
+        JavaRDD globalRDD = sc.parallelize(new ArrayList<Tuple2<Integer, String>>(numPartitions), numPartitions).cache();
 
         // create the computation that will be executed by each partition
         ComputationFunction computeFunction = new ComputationFunction(inputFilePath, numPartitions);
@@ -93,8 +88,6 @@ public class Runner implements Tool {
 
         // store the results of the map function in memory
         step1.persist(StorageLevel.MEMORY_ONLY());
-        // materialize the map function (i.e. execute the computation function)
-        step1.foreachPartition(x -> {});
 
         // Now flatten the results
         JavaPairRDD<Integer,String> step1Flattened = step1.flatMapToPair(tuple -> {
@@ -108,10 +101,9 @@ public class Runner implements Tool {
         // received from other partitions
         step1Flattened.groupByKey().foreach( group -> {
             // print the Id of the destination partition
-            System.out.println("I am partition " + group._1() + ", and I received the following messages:");
-            Iterator<String> iter = group._2().iterator();
-            while(iter.hasNext()) {
-                System.out.println(iter.next());
+            // TODO this only tests that groupBy works. it does not test whether the right partition gets the right messages
+            for (String s : group._2()) {
+                System.out.println("I am partition " + group._1() + " " + s);
             }
         });
 
@@ -124,6 +116,7 @@ public class Runner implements Tool {
                 System.out.println(iter.next());
             }
         }*/
+
     }
 
     public static void main(String[] args) throws Exception {
@@ -131,12 +124,12 @@ public class Runner implements Tool {
     }
 }
 
-class ComputationFunction implements Function2<Integer, Iterator<Tuple2<Integer, String>>, Iterator<Tuple2<Integer, String>>>, Serializable {
+class ComputationFunction implements Function2<Integer, Iterator<Tuple2<Integer, String>>, Iterator<Tuple2<Integer, String>>> {
 
-    String inputPath = "Path";
-    int numPartitions = 0;
+    private String inputPath = "Path";
+    private int numPartitions = 0;
 
-    public ComputationFunction(String _inputPath, int _numPartitions) {
+    ComputationFunction(String _inputPath, int _numPartitions) {
         this.inputPath = _inputPath;
         this.numPartitions = _numPartitions;
     }

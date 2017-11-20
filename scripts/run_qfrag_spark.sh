@@ -35,7 +35,7 @@ while IFS='' read -r line || [ -n "$line" ]; do
 done < "$tempfile"
 
 # qfrag executable
-QFRAG_JAR_DIR="/home/ehussein/ArabesqueWorkspace/QFrag/target"
+QFRAG_JAR_DIR="/Users/mserafini/code-workspace/QFrag/target"
 QFRAG_JAR=`find $QFRAG_JAR_DIR -maxdepth 1 -name "QFrag-*-jar-with-dependencies.jar" | head -1`
 
 if [ -z "$QFRAG_JAR" ] ; then

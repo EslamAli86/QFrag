@@ -51,9 +51,6 @@ public class Configuration extends Logging implements java.io.Serializable {
     public static final String CONF_OUTPUT_PATH = "arabesque.output.path";
     public static final String CONF_OUTPUT_PATH_DEFAULT = "Output";
 
-    public static final String CONF_DEFAULT_AGGREGATOR_SPLITS = "arabesque.aggregators.default_splits";
-    public static final int CONF_DEFAULT_AGGREGATOR_SPLITS_DEFAULT = 1;
-
     public static final String CONF_INCREMENTAL_AGGREGATION = "arabesque.aggregation.incremental";
     public static final boolean CONF_INCREMENTAL_AGGREGATION_DEFAULT = false;
 
@@ -66,13 +63,8 @@ public class Configuration extends Logging implements java.io.Serializable {
     private boolean useCompressedCaches;
     private int cacheThresholdSize;
     private long infoPeriod;
-    private int odagNumAggregators;
-    private boolean is2LevelAggregationEnabled;
-    private boolean forceGC;
-
 
     private String outputPath;
-    private int defaultAggregatorSplits;
 
     private boolean isGraphEdgeLabelled;
     protected boolean initialized = false;
@@ -134,13 +126,7 @@ public class Configuration extends Logging implements java.io.Serializable {
         LOG.info("Initializing Configuration...");
 
         infoPeriod = getLong(INFO_PERIOD, INFO_PERIOD_DEFAULT);
-        odagNumAggregators = getInteger(CONF_EZIP_AGGREGATORS, CONF_EZIP_AGGREGATORS_DEFAULT);
-        is2LevelAggregationEnabled = getBoolean(CONF_2LEVELAGG_ENABLED, CONF_2LEVELAGG_ENABLED_DEFAULT);
-        forceGC = getBoolean(CONF_FORCE_GC, CONF_FORCE_GC_DEFAULT);
-
         //outputPath = getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT + "_" + computationClass.getName());
-
-        defaultAggregatorSplits = getInteger(CONF_DEFAULT_AGGREGATOR_SPLITS, CONF_DEFAULT_AGGREGATOR_SPLITS_DEFAULT);
 
 /*        Computation<?> computation = createComputation();
         computation.initAggregations();*/
@@ -219,26 +205,6 @@ public class Configuration extends Logging implements java.io.Serializable {
         return getBoolean(CONF_OUTPUT_ACTIVE, CONF_OUTPUT_ACTIVE_DEFAULT);
     }
 
-    public int getODAGNumAggregators() {
-        return odagNumAggregators;
-    }
-
-    public String getOdagFlushMethod() {
-       return getString(CONF_ODAG_FLUSH_METHOD, CONF_ODAG_FLUSH_METHOD_DEFAULT);
-    }
-
-    public int getMaxEnumerationsPerMicroStep() {
-        return 10000000;
-    }
-
-    public boolean is2LevelAggregationEnabled() {
-        return is2LevelAggregationEnabled;
-    }
-
-    public boolean isForceGC() {
-        return forceGC;
-    }
-
     public String getOutputPath() {
         return outputPath;
     }
@@ -257,14 +223,6 @@ public class Configuration extends Logging implements java.io.Serializable {
 
     public boolean isAggregationIncremental() {
        return getBoolean (CONF_INCREMENTAL_AGGREGATION, CONF_INCREMENTAL_AGGREGATION_DEFAULT);
-    }
-
-    public int getMaxOdags() {
-       return getInteger (CONF_COMM_STRATEGY_ODAGMP_MAX, CONF_COMM_STRATEGY_ODAGMP_MAX_DEFAULT);
-    }
-
-    public String getCommStrategy() {
-       return getString (CONF_COMM_STRATEGY, CONF_COMM_STRATEGY_DEFAULT);
     }
 
 }
