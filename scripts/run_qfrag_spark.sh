@@ -35,8 +35,10 @@ while IFS='' read -r line || [ -n "$line" ]; do
 done < "$tempfile"
 
 # qfrag executable
-QFRAG_JAR_DIR="/Users/mserafini/code-workspace/QFrag/target"
-QFRAG_JAR=`find $QFRAG_JAR_DIR -maxdepth 1 -name "QFrag-*-jar-with-dependencies.jar" | head -1`
+#QFRAG_JAR_DIR="/Users/mserafini/code-workspace/QFrag/target"
+PWD="`pwd`"
+QFRAG_JAR_DIR="$(dirname "$PWD")"
+QFRAG_JAR=`find $QFRAG_JAR_DIR -maxdepth 2 -name "QFrag-*-jar-with-dependencies.jar" | head -1`
 
 if [ -z "$QFRAG_JAR" ] ; then
   echo "No QFrag jar found in $QFRAG_JAR_DIR. Did you compile it?"

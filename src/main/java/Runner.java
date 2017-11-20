@@ -45,7 +45,7 @@ public class Runner implements Tool {
         config.setHadoopConfig (sc.hadoopConfiguration());
         numPartitions = config.numPartitions();
 
-        sc.broadcast(inputFilePath);
+        //sc.broadcast(inputFilePath);
         Broadcast<SparkConfiguration> configBC = sc.broadcast(config);
 
         configBC.value().initialize();
@@ -81,13 +81,13 @@ public class Runner implements Tool {
         JavaRDD globalRDD = sc.parallelize(new ArrayList<Tuple2<Integer, String>>(numPartitions), numPartitions).cache();
 
         // create the computation that will be executed by each partition
-        ComputationFunction computeFunction = new ComputationFunction(inputFilePath, numPartitions);
+        // First step computation
+        Computation1Function compute1Function = new Computation1Function(inputFilePath, numPartitions);
+        // Second step computation
+        Computation2Function compute2Function = new Computation2Function();
 
-        // pass the computation function to each partition to be executed
-        JavaRDD<Tuple2<Integer, String>> step1 = globalRDD.mapPartitionsWithIndex(computeFunction,false);
-
-        // store the results of the map function in memory
-        step1.persist(StorageLevel.MEMORY_ONLY());
+        // pass the the first computation function to each partition to be executed
+        JavaRDD<Tuple2<Integer, String>> step1 = globalRDD.mapPartitionsWithIndex(compute1Function,false);
 
         // Now flatten the results
         JavaPairRDD<Integer,String> step1Flattened = step1.flatMapToPair(tuple -> {
@@ -97,26 +97,12 @@ public class Runner implements Tool {
         });
 
         // Now group the messages by the Id of the destination partition
-        // and print the messages that the destination partition
-        // received from other partitions
-        step1Flattened.groupByKey().foreach( group -> {
-            // print the Id of the destination partition
-            // TODO this only tests that groupBy works. it does not test whether the right partition gets the right messages
-            for (String s : group._2()) {
-                System.out.println("I am partition " + group._1() + " " + s);
-            }
-        });
-
-        /*List<Tuple2<Integer, Iterable<String>>> msgList = flatStep1.groupByKey().collect();
-
-        for(int i = 0 ; i < msgList.size() ; ++i) {
-            Iterator<String> iter = msgList.get(i)._2().iterator();
-            System.out.println("I am partition " + msgList.get(i)._1() + " and I got the following messages:");
-            while(iter.hasNext()) {
-                System.out.println(iter.next());
-            }
-        }*/
-
+        // and execute the second computation step
+        JavaRDD step2Results = step1Flattened.groupByKey().mapPartitionsWithIndex(compute2Function,false);
+        // in case you want to store the results of the map function in memory
+        // step2Results.persist(StorageLevel.MEMORY_ONLY());
+        // Now execute the previous set of transformations
+        step2Results.foreachPartition(x -> {});
     }
 
     public static void main(String[] args) throws Exception {
@@ -124,12 +110,12 @@ public class Runner implements Tool {
     }
 }
 
-class ComputationFunction implements Function2<Integer, Iterator<Tuple2<Integer, String>>, Iterator<Tuple2<Integer, String>>> {
+class Computation1Function implements Function2<Integer, Iterator<Tuple2<Integer, String>>, Iterator<Tuple2<Integer, String>>> {
 
     private String inputPath = "Path";
     private int numPartitions = 0;
 
-    ComputationFunction(String _inputPath, int _numPartitions) {
+    Computation1Function(String _inputPath, int _numPartitions) {
         this.inputPath = _inputPath;
         this.numPartitions = _numPartitions;
     }
@@ -147,6 +133,23 @@ class ComputationFunction implements Function2<Integer, Iterator<Tuple2<Integer,
             list.add(new Tuple2<>(i,msg));
         }
 
+        return list.iterator();
+    }
+}
+
+class Computation2Function implements Function2<Integer, Iterator<Tuple2<Integer, Iterable<String>>>, Iterator<Integer>> {
+    @Override
+    public Iterator<Integer> call(Integer partitionId, Iterator<Tuple2<Integer, Iterable<String>>> v2) throws Exception {
+        Tuple2<Integer, Iterable<String>> iter = v2.next();
+        Iterator<String> msgs = iter._2().iterator();
+
+        while(msgs.hasNext()) {
+            String msg = msgs.next();
+            System.out.println("I am partition " + partitionId + " and I received the following message \"" + msg + "\"");
+        }
+
+        ArrayList<Integer> list = new ArrayList();
+        list.add(0);
         return list.iterator();
     }
 }
